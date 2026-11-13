@@ -51,3 +51,11 @@ Mitakshi.apk
 Mitakshi-*.apk
 Mitakshi.aab
 model-upload/
+
+# local tooling (kept on disk, not in git)
+.claude/
+.vscode/
+.github/
+AGENTS.md
+CLAUDE.md
+*.tsbuildinfo
