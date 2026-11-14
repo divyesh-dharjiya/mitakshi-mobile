@@ -38,7 +38,7 @@ export const MODELS: Record<ModelKey, ModelDef> = {
   },
   // Real-ESRGAN x4plus (BSD-3-Clause), the same file as the web app (tools/build-sr.mjs: RGBA bytes in and out, 256²
   // tiles, float16 weights). Downloaded once rather than built in, so the APK stays under 25 MB.
-  sr: { url: `${WEB_MODELS}/esrgan_x4plus_rgba.onnx`, label: 'HD upscaler', large: { bytes: 36_123_606 } },
+  sr: { url: `${WEB_MODELS}/esrgan_x4plus_rgba.onnx`, label: 'Upscaler', large: { bytes: 36_123_606 } },
   matte: { url: `${HF}/Xenova/modnet/resolve/main/onnx/model_fp16.onnx`, label: 'Background engine', large: { bytes: 12_984_781 } },
 };
 
