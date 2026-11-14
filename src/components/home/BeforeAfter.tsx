@@ -56,7 +56,7 @@ export function BeforeAfter({ fill }: { fill?: boolean }) {
   const afterTag = useAnimatedStyle(() => ({ opacity: pos.value < 0.8 ? 1 : 0 }));
 
   return (
-    <View style={[styles.root, fill && styles.fill]} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)} accessibilityLabel="Before and after example" accessible>
+    <View style={fill ? styles.fill : styles.root} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)} accessibilityLabel="Before and after example" accessible>
       {/* Before underneath, the crisp After revealed from the left by the divider. */}
       <Image source={SOFT} style={styles.img} resizeMode="cover" fadeDuration={0} />
       <Animated.View style={[styles.reveal, reveal]}>
@@ -82,7 +82,8 @@ export function BeforeAfter({ fill }: { fill?: boolean }) {
 
 const useStyles = makeStyles((C) => ({
   root: { width: '100%', aspectRatio: 3 / 2, borderRadius: 26, overflow: 'hidden', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line2 },
-  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: undefined, aspectRatio: undefined, borderRadius: 0, borderWidth: 0 },
+  // Separate from root (not an override of it): react-native-web keeps root's aspectRatio when it is overridden with undefined.
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', backgroundColor: C.surface },
   img: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
   reveal: { position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' },
   handle: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 44, alignItems: 'center', justifyContent: 'center' },

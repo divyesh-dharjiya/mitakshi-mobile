@@ -30,6 +30,8 @@ const options = {
   define: {
     'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
     'process.env.EXPO_PUBLIC_ASSET_BASE': JSON.stringify(process.env.EXPO_PUBLIC_ASSET_BASE ?? ''),
+    // worker.ts is shared with the web app, which names the same setting NEXT_PUBLIC_ASSET_BASE.
+    'process.env.NEXT_PUBLIC_ASSET_BASE': JSON.stringify(process.env.EXPO_PUBLIC_ASSET_BASE ?? ''),
     'process.env.EXPO_PUBLIC_MODEL_BASE': JSON.stringify(process.env.EXPO_PUBLIC_MODEL_BASE ?? ''),
   },
   logLevel: 'warning',

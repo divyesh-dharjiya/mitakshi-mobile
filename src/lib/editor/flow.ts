@@ -5,7 +5,7 @@ import { type PhotoSource, useEditor } from './store';
 import { setTab } from './view';
 
 /** What the user chose on the home screen: one tap picks a photo and starts that job. */
-export type StartIntent = 'enhance' | 'old' | 'auto' | 'crop' | 'background';
+export type StartIntent = 'enhance' | 'auto' | 'crop' | 'background';
 
 /** Pick a photo, open it, and go straight to the chosen tool. */
 export function startWith(intent: StartIntent) {
@@ -25,5 +25,4 @@ async function openWith(source: PhotoSource, name: string, intent: StartIntent) 
   await scanDone();
   // The photo opens with the right mode already chosen; the user taps Enhance when ready (nothing is
   // downloaded or processed until then).
-  if (intent === 'old') useEditor.setState((s) => ({ opts: { ...s.opts, faces: false, colorize: true } }));
 }

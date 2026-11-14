@@ -91,7 +91,7 @@ export async function runBatch() {
   if (start.batchRunning) return;
   stop = false;
   useEditor.setState({ batchRunning: true });
-  const { batchScale, batchFaces, batchColor } = start;
+  const { batchScale, batchFaces } = start;
 
   for (const id of useEditor.getState().batchItems.map((i) => i.id)) {
     if (stop) break;
@@ -103,9 +103,7 @@ export async function runBatch() {
     try {
       bmp = await decode(it.source);
       const source = bmp;
-      const grayscale = batchColor ? (await getAI().scan(await copy(source))).grayscale : false;
-      // One engine per photo: colour for a black & white print, faces for everything else.
-      const opts: EnhanceOptions = { scale: batchScale, faces: batchFaces && !grayscale, colorize: grayscale };
+      const opts: EnhanceOptions = { scale: batchScale, faces: batchFaces };
       const r = await withRecovery((safe) => copy(source).then((img) => getAI().enhance(img, { ...opts, safe }, (stage, v) => patch(id, { stage, progress: v }), false)));
       bmp.close();
       bmp = null;

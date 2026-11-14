@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { ArrowLeftRight, ArrowUpDown, Crop, RotateCw } from '@/components/icons';
 import { Button } from '@/components/ui/Button';
 import { Chip, Tile } from '@/components/ui/Tile';
@@ -29,11 +29,14 @@ export function CropPanel() {
         <Tile icon={ArrowUpDown} label="Mirror" disabled={busy} onPress={() => void flip('y')} />
       </View>
       <Text style={styles.label}>Crop to</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      {/* Three to a row, all the same width: every shape is visible without scrolling. */}
+      <View style={styles.grid}>
         {RATIOS.map((r) => (
-          <Chip key={r.label} label={r.label} active={ratio === r.aspect} onPress={() => setRatio(ratio === r.aspect ? null : r.aspect)} />
+          <View key={r.label} style={styles.cell}>
+            <Chip label={r.label} active={ratio === r.aspect} onPress={() => setRatio(ratio === r.aspect ? null : r.aspect)} />
+          </View>
         ))}
-      </ScrollView>
+      </View>
       <Button
         variant="primary"
         size="lg"
@@ -54,5 +57,6 @@ export function CropPanel() {
 const useStyles = makeStyles((C) => ({
   row: { flexDirection: 'row', gap: 8 },
   label: { color: C.text2, fontSize: 13, fontFamily: F.uiSemi },
-  chips: { gap: 8, paddingRight: 8 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  cell: { flexBasis: '30%', flexGrow: 1 },
 }));

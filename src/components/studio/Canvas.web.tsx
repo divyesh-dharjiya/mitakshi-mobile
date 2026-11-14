@@ -89,8 +89,6 @@ const css = {
     overflow: 'hidden',
     touchAction: 'none',
     userSelect: 'none',
-    background:
-      'radial-gradient(rgba(10,40,110,0.08) 1px, transparent 1.4px) 0 0 / 22px 22px, #e1eaf6',
   },
   art: {
     position: 'absolute',

@@ -47,7 +47,7 @@ export function Tile({
   );
 }
 
-/** A compact on/off option: icon, name and its current value (Enhance's Faces, Colorize and Size). */
+/** A compact on/off option: icon, name and its current value (Enhance's Faces, Auto edit and Size). */
 export function OptionPill({
   icon: Icon,
   label,
@@ -111,7 +111,7 @@ const useStyles = makeStyles((C) => ({
   pillIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: C.fill2 },
   pillLabel: { color: C.text2, fontSize: 13, fontFamily: F.uiSemi },
   pillValue: { color: C.text3, fontSize: 11.5, fontFamily: F.uiMedium, marginTop: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 38, paddingHorizontal: 16, borderRadius: 19, backgroundColor: C.fill2, borderWidth: 1, borderColor: C.line },
+  chip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 38, paddingHorizontal: 16, borderRadius: 19, backgroundColor: C.fill2, borderWidth: 1, borderColor: C.line },
   chipOn: { backgroundColor: C.accent, borderColor: C.accent },
   chipText: { color: C.text2, fontSize: 13.5, fontFamily: F.uiSemi },
   chipTextOn: { color: C.onAccent },

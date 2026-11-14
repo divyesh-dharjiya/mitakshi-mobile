@@ -1,6 +1,6 @@
 /**
- * Model files for the native engine. The face detector and the upscaler (used by every Enhance)
- * ship inside the app and are copied to app storage on first use (ONNX Runtime needs real file
+ * Model files for the native engine. The face detector (used by every Enhance)
+ * ships inside the app and are copied to app storage on first use (ONNX Runtime needs real file
  * paths).
  * Every other engine downloads once from Hugging Face into app storage, with progress and a size
  * check that rejects partial files, so the app itself stays small.
@@ -12,12 +12,11 @@ import { MODELS, type ModelKey } from './registry';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const BUNDLED: Partial<Record<ModelKey, { name: string; module: number }[]>> = {
   detector: [{ name: 'yunet.onnx', module: require('../../../public/models/yunet.onnx') }],
-  sr: [{ name: 'esrgan_x4v3_rgba.onnx', module: require('../../../public/models/esrgan_x4v3_rgba.onnx') }],
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 /** Bump when the bundled model files change, so devices copy the new ones. */
-const BUNDLE_VERSION = '4';
+const BUNDLE_VERSION = '5';
 
 const dir = () => {
   const d = new Directory(Paths.document, 'models');
@@ -46,18 +45,6 @@ function storedLarge(key: ModelKey): File | null {
 /** Large engines available offline: built into the app, or downloaded earlier. */
 export async function cachedModels(): Promise<ModelKey[]> {
   return (Object.keys(MODELS) as ModelKey[]).filter((k) => MODELS[k].large && (BUNDLED[k] || storedLarge(k)));
-}
-
-/** Delete the downloaded engines (the bundled ones stay, they ship with the app). */
-export async function clearModels() {
-  for (const k of Object.keys(MODELS) as ModelKey[]) {
-    const def = MODELS[k];
-    if (BUNDLED[k] || !def.large) continue;
-    for (const src of [def, ...(def.fallbacks ?? [])]) {
-      const f = new File(dir(), fileOf(src.url));
-      if (f.exists) f.delete();
-    }
-  }
 }
 
 async function copyBundled(key: ModelKey): Promise<string> {

@@ -9,7 +9,7 @@ export function startBusy(title: string, sub = '', cancel?: () => void) {
   useEditor.setState({ busy: { title, sub, progress: 0, startedAt: Date.now(), cancel } });
 }
 
-export function updateBusy(patch: { title?: string; sub?: string; progress?: number }) {
+export function updateBusy(patch: { title?: string; sub?: string; progress?: number; startedAt?: number }) {
   const b = useEditor.getState().busy;
   if (b) useEditor.setState({ busy: { ...b, ...patch } });
 }
@@ -20,7 +20,9 @@ export function endBusy() {
 
 /** Progress callback for AI jobs (stage, 0..1, optional download bytes). */
 export function jobProgress(stage: string, value: number, bytes?: [number, number]) {
-  updateBusy({ title: stage, progress: value, sub: bytes ? `${fmtMB(bytes[0])} / ${fmtMB(bytes[1])} · one-time download, saved on this device` : timeLeft(value) });
+  // While a model downloads the clock restarts, so the time left only measures the processing that follows (a download
+  // that took minutes would otherwise make a job of seconds look like it needs ten minutes).
+  updateBusy({ title: stage, progress: value, ...(bytes ? { startedAt: Date.now() } : {}), sub: bytes ? `${fmtMB(bytes[0])} / ${fmtMB(bytes[1])} · one-time download, saved on this device` : timeLeft(value) });
 }
 
 /** "About 20 s left", from how long the task has run and how far it is. Empty until the estimate is steady. */

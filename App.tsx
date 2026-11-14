@@ -5,16 +5,21 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-// Per-weight imports, so the build only ships the four font files the app uses.
-import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
-import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
-import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
-import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { Splash } from '@/components/brand/Splash';
 import { Studio } from '@/components/studio/Studio';
 import { BRAND } from '@/lib/brand';
 import * as editor from '@/lib/editor';
 import { makeStyles, useThemeMode } from '@/theme';
+
+/* eslint-disable @typescript-eslint/no-require-imports */
+// The same four Inter weights as before, cut down to Latin (assets/fonts, 93 KB each instead of 340 KB): the APK stays small.
+const INTER = {
+  Inter_400Regular: require('./assets/fonts/Inter_400Regular.ttf'),
+  Inter_500Medium: require('./assets/fonts/Inter_500Medium.ttf'),
+  Inter_600SemiBold: require('./assets/fonts/Inter_600SemiBold.ttf'),
+  Inter_700Bold: require('./assets/fonts/Inter_700Bold.ttf'),
+};
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 // Development only: lets the browser console drive the editor (for example `__editor.loadPhoto(blob, 'a.jpg')`).
 if (__DEV__ && Platform.OS === 'web') (globalThis as { __editor?: typeof editor }).__editor = editor;
@@ -40,7 +45,7 @@ function useServiceWorker() {
 export default function App() {
   const styles = useStyles();
   const mode = useThemeMode((s) => s.mode);
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+  const [fontsLoaded] = useFonts(INTER);
   const [splash, setSplash] = useState(true);
   useServiceWorker();
   useEffect(() => {

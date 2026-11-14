@@ -6,11 +6,11 @@
  */
 import * as ort from 'onnxruntime-web/webgpu';
 import { type Face, alignMatrix, detectFaces, pasteFaces, restoreFace } from './faces';
-import { type Affine, type Raw, bitmapToRaw, cloneRaw, isGrayscale, rawToBitmap, resizeRaw } from './image';
-import { cachedModels, clearModels, loadModel } from './models';
+import { type Affine, type Raw, bitmapToRaw, cloneRaw, rawToBitmap, resizeRaw } from './image';
+import { cachedModels, loadModel, narrowWeightInput } from './models';
 import type { EnhanceOptions, FaceInfo, Req, Res } from './protocol';
 import { MODELS, type ModelKey, RESTORER_SIZE } from './registry';
-import { colorize, matte, superResolve, upscaleCrop } from './tasks';
+import { matte, superResolve, upscaleCrop } from './tasks';
 
 // Self-hosted WASM engine: copied to /ort/ for builds (tools/copy-ort.mjs). Vite's dev server can't
 // serve module imports from /public, so dev reads the same files from node_modules.
@@ -30,7 +30,7 @@ const MIN_FACE_PX = 32;
 /** Restoring a face costs seconds: the biggest ones in a crowd are the ones people look at. */
 const MAX_FACES = 8;
 /** Rough relative cost of each step (a restored face = 1), for one overall progress bar. */
-const COST = { detect: 0.15, load: 0.3, face: 0.5, tile: 0.35, colorize: 0.8, finish: 0.3 };
+const COST = { detect: 0.15, load: 0.3, face: 0.5, tile: 0.35, finish: 0.3 };
 
 // ── Backend ─────────────────────────────────────────────────────────────────────────────────
 type GPUish = { requestAdapter(): Promise<{ info?: { vendor?: string } } | null> };
@@ -97,6 +97,7 @@ function session(key: ModelKey, job: number, cpu = false) {
       if (def.large) post({ type: 'progress', id: job, stage: `Downloading ${def.label}`, value: loaded / total, bytes: [loaded, total] });
     });
     post({ type: 'progress', id: job, stage: `Starting ${def.label.toLowerCase()}…`, value: 1 });
+    if (key === 'restorer') narrowWeightInput(model); // CodeFormer's 64-bit strength input: see models.ts
     const be = cpu ? 'wasm' : await backend();
     try {
       const t = performance.now();
@@ -146,21 +147,12 @@ async function enhance(job: number, bitmap: ImageBitmap, o: EnhanceOptions, keep
   // One overall progress value: every step adds its share of `total` as it finishes.
   const tiles = (w: number, h: number) => Math.ceil(w / 224) * Math.ceil(h / 224);
   let done = 0;
-  let total = COST.finish + (o.faces ? COST.detect + COST.load + 2 * COST.face : 0) + (o.colorize ? COST.load + COST.colorize : 0) + (o.scale > 1 ? COST.load + tiles(img.width, img.height) * COST.tile : 0);
+  let total = COST.finish + (o.faces ? COST.detect + COST.load + 2 * COST.face : 0) + (o.scale > 1 ? COST.load + tiles(img.width, img.height) * COST.tile : 0);
   let shown = 0;
   const report = (stage: string, extra = 0) => {
     shown = Math.max(shown, Math.min(0.99, (done + extra) / total));
     progress(job, stage, shown);
   };
-
-  if (o.colorize) {
-    report('Colorizing');
-    const s = await session('colorizer', job, !!o.safe);
-    done += COST.load;
-    checkpoint();
-    img = await colorize(ort, s, img);
-    done += COST.colorize;
-  }
 
   let faces: Face[] = [];
   const restored: { restored: Raw; large: Raw; matrix: Affine; aligned: Raw }[] = [];
@@ -237,7 +229,7 @@ scope.onmessage = async (e: MessageEvent<Req>) => {
       case 'scan': {
         const img = bitmapToRaw(m.bitmap);
         m.bitmap.close();
-        post({ type: 'scanned', id: m.id, faces: (await detect(img, m.id)).length, grayscale: isGrayscale(img) });
+        post({ type: 'scanned', id: m.id, faces: (await detect(img, m.id)).length });
         break;
       }
       case 'enhance':
@@ -247,6 +239,10 @@ scope.onmessage = async (e: MessageEvent<Req>) => {
         } finally {
           m.bitmap.close();
         }
+        break;
+      case 'warm':
+        // Best effort: a failure here only means the next Enhance loads the model itself.
+        await session(m.key, 0).catch(() => {});
         break;
       case 'composite': {
         const bitmap = await rawToBitmap(compose(m.strengths));
@@ -261,12 +257,6 @@ scope.onmessage = async (e: MessageEvent<Req>) => {
         post({ type: 'matted', id: m.id, ...r }, [r.alpha.buffer]);
         break;
       }
-      case 'clear-models':
-        for (const [, p] of sessions) p.then((s) => s.release()).catch(() => {});
-        sessions.clear();
-        await clearModels();
-        post({ type: 'cleared', id: m.id });
-        break;
     }
   } catch (err) {
     const aborted = (err as Error)?.name === 'AbortError';

@@ -69,14 +69,14 @@ export async function scanPhoto() {
     // The 2048 px preview is plenty to find faces and judge the photo, and far lighter than the full photo.
     const r = await getAI().scan(await copy(useEditor.getState().origPreview ?? original));
     if (useEditor.getState().original !== original) return;
-    const mp = (original.width * original.height) / 1e6;
     markCached(['detector']);
     useEditor.setState((s) => ({
-      scan: { faces: r.faces, grayscale: r.grayscale },
-      // Upscaling cost grows with the photo's pixels, so it is automatic only where it is quick and useful: small
-      // photos get 4×, mid-size ones 2×, and anything above 1.5 MP (most phone photos) keeps its size.
-      opts: { ...s.opts, faces: r.faces > 0 && !r.grayscale, colorize: r.grayscale, scale: mp > 1.5 ? 1 : mp < 0.25 ? 4 : 2 },
+      scan: { faces: r.faces },
+      // 4× Ultra by default, like the web app (the result is capped at 16 MP, so a large photo is scaled to fit first).
+      opts: { ...s.opts, faces: r.faces > 0, scale: 4 },
     }));
+    // The face engine takes a while to load after the app starts: begin now, while the photo is being looked at.
+    if (r.faces > 0 && useEditor.getState().cached.includes('restorer')) getAI().warm('restorer');
   } catch (e) {
     console.warn('scan failed', e);
   }

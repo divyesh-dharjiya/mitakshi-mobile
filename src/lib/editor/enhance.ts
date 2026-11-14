@@ -6,16 +6,16 @@ import { copy } from '@/lib/imageio';
 import { toast } from '@/lib/toast';
 import { endBusy, jobProgress, startBusy } from './busy';
 import { cancelJob, confirmDownloads, markCached, withRecovery } from './engine';
+import { autoEnhance } from './look';
 import { setWork } from './photo';
 import { useEditor } from './store';
 import { setCompare } from './view';
 
-/** AI Enhance: face restoration, colorization and upscaling, plus per-face controls. */
+/** AI Enhance: face restoration and upscaling, then Auto edit (light and colour), plus per-face controls. */
 
 export function modelsFor(o: EnhanceOptions): ModelKey[] {
   const keys: ModelKey[] = ['detector'];
   if (o.faces) keys.push('restorer');
-  if (o.colorize) keys.push('colorizer');
   if (o.scale > 1) keys.push('sr');
   return keys;
 }
@@ -31,7 +31,13 @@ export async function runEnhance() {
   const s = useEditor.getState();
   if (!s.work || s.busy) return;
   const o = { ...s.opts };
-  if (!o.faces && !o.colorize && o.scale === 1) return toast('Turn on at least one AI step.');
+  const noAI = !o.faces && o.scale === 1;
+  if (noAI && !s.autoEdit) return toast('Turn on at least one step.');
+  // Auto edit alone needs no AI engine: it only sets light and colour.
+  if (noAI) {
+    if (s.activeFilter !== 'auto') autoEnhance();
+    return;
+  }
   if (!(await confirmDownloads(modelsFor(o)))) return;
 
   startBusy('AI Enhance', 'Starting…', cancelJob);
@@ -51,9 +57,11 @@ export async function runEnhance() {
       bmp = (await getAI().composite(currentStrengths())).bitmap;
     }
     await setWork(bmp);
+    // The new photo's own light and colour, measured on the enhanced result.
+    if (s.autoEdit && useEditor.getState().activeFilter !== 'auto') autoEnhance();
 
     const parts = [
-      o.colorize && 'colorized',
+      s.autoEdit && 'auto edit',
       r.faces.length ? `${r.faces.length} face${r.faces.length > 1 ? 's' : ''} restored` : '',
       o.scale > 1 && fmtSize(r.width, r.height),
     ].filter(Boolean);

@@ -70,7 +70,6 @@ export function BatchModal() {
   const running = useEditor((s) => s.batchRunning);
   const scale = useEditor((s) => s.batchScale);
   const faces = useEditor((s) => s.batchFaces);
-  const color = useEditor((s) => s.batchColor);
   const { width, height } = useWindowDimensions();
   if (!open) return null;
 
@@ -96,10 +95,7 @@ export function BatchModal() {
 
           <View style={[styles.options, compact && { flexDirection: 'column' }]}>
             <View style={styles.option}>
-              <Switch label="Restore faces" checked={faces} disabled={running} onChange={(batchFaces) => useEditor.setState(batchFaces ? { batchFaces, batchColor: false } : { batchFaces })} />
-            </View>
-            <View style={styles.option}>
-              <Switch label="Auto-colorize B&W" checked={color} disabled={running} onChange={(batchColor) => useEditor.setState(batchColor ? { batchColor, batchFaces: false } : { batchColor })} />
+              <Switch label="Restore faces" checked={faces} disabled={running} onChange={(batchFaces) => useEditor.setState({ batchFaces })} />
             </View>
             <View style={[styles.option, { justifyContent: 'center' }]}>
               <Segmented

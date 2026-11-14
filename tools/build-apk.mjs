@@ -16,6 +16,8 @@ const project = fileURLToPath(new URL('..', import.meta.url)).replace(/[\\/]$/, 
 const win = process.platform === 'win32';
 const clean = process.argv.includes('--clean');
 const aab = process.argv.includes('--aab');
+// The finished APK is recompressed with Zopfli (about 1 MB smaller, about 10 minutes). --fast skips it for test builds.
+const fast = process.argv.includes('--fast');
 // Phones are arm64-v8a. Pass --abi x86_64 for a copy that runs on the Android emulator on a PC. The
 // Play bundle also carries x86_64 (Chromebooks, emulators); Play sends each device only its own ABI.
 const abi = process.argv.includes('--abi') ? process.argv[process.argv.indexOf('--abi') + 1] : aab ? 'arm64-v8a,x86_64' : 'arm64-v8a';
@@ -79,5 +81,23 @@ run(join(android, win ? 'gradlew.bat' : 'gradlew'), [aab ? 'bundleRelease' : 'as
 const outputs = join(android, 'app', 'build', 'outputs');
 const built = aab ? join(outputs, 'bundle', 'release', 'app-release.aab') : join(outputs, 'apk', 'release', 'app-release.apk');
 const out = aab ? join(project, 'Mitakshi.aab') : join(project, abi === 'arm64-v8a' ? 'Mitakshi.apk' : `Mitakshi-${abi.replace(/,/g, '+')}.apk`);
-copyFileSync(built, out);
+if (aab || fast || abi !== 'arm64-v8a') copyFileSync(built, out);
+else {
+  // Zopfli finds a tighter encoding of the same data, so the phone unpacks exactly the same files. Rewriting the
+  // archive drops its signature, so it is signed again with the key Gradle used.
+  const tools = join(env.ANDROID_HOME, 'build-tools');
+  const bt = join(tools, readdirSync(tools).sort().pop());
+  const packed = join(outputs, 'apk', 'release', 'app-release-zopfli.apk');
+  console.log('\nRecompressing with Zopfli (about 10 minutes)...');
+  run(`"${join(bt, win ? 'zipalign.exe' : 'zipalign')}"`, ['-f', '-z', '4', `"${built}"`, `"${packed}"`], android);
+  const props = hasUploadKey ? Object.fromEntries(readFileSync(gradleProps, 'utf8').split(/\r?\n/).filter((l) => l.startsWith('MITAKSHI_UPLOAD_')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])) : null;
+  const key = props
+    ? { ks: props.MITAKSHI_UPLOAD_STORE_FILE, alias: props.MITAKSHI_UPLOAD_KEY_ALIAS, ksPass: props.MITAKSHI_UPLOAD_STORE_PASSWORD, keyPass: props.MITAKSHI_UPLOAD_KEY_PASSWORD }
+    : { ks: join(android, 'app', 'debug.keystore'), alias: 'androiddebugkey', ksPass: 'android', keyPass: 'android' };
+  // Passwords go through the environment, not the command line.
+  env.MITAKSHI_KS_PASS = key.ksPass;
+  env.MITAKSHI_KEY_PASS = key.keyPass;
+  run(`"${join(bt, win ? 'apksigner.bat' : 'apksigner')}"`, ['sign', '--ks', `"${key.ks}"`, '--ks-key-alias', key.alias, '--ks-pass', 'env:MITAKSHI_KS_PASS', '--key-pass', 'env:MITAKSHI_KEY_PASS', '--out', `"${out}"`, `"${packed}"`], android);
+  rmSync(`${out}.idsig`, { force: true });
+}
 console.log(`\n${aab ? 'Play Store bundle' : 'APK'} ready: ${out}`);

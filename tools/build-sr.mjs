@@ -1,5 +1,9 @@
-// Rebuilds the on-device upscaler from Qualcomm's Real-ESRGAN General x4v3 export:
-//   node tools/build-sr.mjs  [in.onnx] [out.onnx]
+// Rebuilds the in-browser upscaler (Real-ESRGAN x4plus, FaceFusion's real_esrgan_x4.onnx) in the app's tile format:
+//   node tools/build-sr.mjs  [in.onnx] [out.onnx] [--int8] [--sharp=0.6] [--net-in=image] [--net-out=upscaled_image]
+//
+// The same wrapper turns Real-ESRGAN x4plus (the larger, sharper network; FaceFusion's real_esrgan_x4.onnx has its
+// tensors named input / output) into the app's tile format:
+//   node tools/build-sr.mjs real_esrgan_x4.onnx public/models/esrgan_x4plus_rgba.onnx --net-in=input --net-out=output --sharp=0
 //
 // What changes, and why (the network itself does not):
 //  - Input is the photo's own RGBA bytes (uint8, NHWC) and the outputs are RGBA bytes too. The
@@ -19,11 +23,18 @@ import pkg from 'onnx-proto';
 const { onnx } = pkg;
 
 const fromRoot = (p) => new URL(`../${p}`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
-// The Qualcomm export (and its .data weights) lives in tools/source so it is not shipped with the app.
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const input = args[0] ?? fromRoot('tools/source/real_esrgan_general_x4v3.onnx');
-const output = args[1] ?? fromRoot('public/models/esrgan_x4v3_rgba.onnx');
+const input = args[0];
+const output = args[1] ?? fromRoot('public/models/esrgan_x4plus_rgba.onnx');
+if (!input) {
+  console.error('Usage: node tools/build-sr.mjs real_esrgan_x4.onnx [out.onnx] --net-in=input --net-out=output --sharp=0');
+  process.exit(1);
+}
 const TILE = 256;
+// Names of the network's own input and output tensors (Qualcomm's export: image / upscaled_image).
+const flag = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
+const NET_IN = flag('net-in', 'image');
+const NET_OUT = flag('net-out', 'upscaled_image');
 const INT8 = process.argv.includes('--int8');
 // The compact upscaler leaves noisy, soft photos a little smooth ("painted"). A light unsharp mask on its output, done
 // inside the graph, brings the edges back. --sharp=0 turns it off.
@@ -111,7 +122,7 @@ const pre = [
   node('Slice', ['rgba', 'c_s0', 'c_e3', 'c_ax3'], ['p_rgb']),
   node('Cast', ['p_rgb'], ['p_f'], { to: [A.INT, T.FLOAT] }),
   node('Transpose', ['p_f'], ['p_chw'], { perm: [A.INTS, [0, 3, 1, 2]] }),
-  node('Mul', ['p_chw', 'c_inv255'], ['image']),
+  node('Mul', ['p_chw', 'c_inv255'], [NET_IN]),
 ];
 
 // Post-processing: float 0..1 NCHW -> RGBA bytes NHWC.
@@ -128,10 +139,10 @@ const post = (src, tag, out) => [
 ];
 // Unsharp mask: y + k * (y - 3x3 mean(y)).
 const sharpen = [
-  node('AveragePool', ['upscaled_image'], ['sh_blur'], { kernel_shape: [A.INTS, [3, 3]], strides: [A.INTS, [1, 1]], pads: [A.INTS, [1, 1, 1, 1]] }),
-  node('Sub', ['upscaled_image', 'sh_blur'], ['sh_d']),
+  node('AveragePool', [NET_OUT], ['sh_blur'], { kernel_shape: [A.INTS, [3, 3]], strides: [A.INTS, [1, 1]], pads: [A.INTS, [1, 1, 1, 1]] }),
+  node('Sub', [NET_OUT, 'sh_blur'], ['sh_d']),
   node('Mul', ['sh_d', 'c_k'], ['sh_m']),
-  node('Add', ['upscaled_image', 'sh_m'], ['sharp_image']),
+  node('Add', [NET_OUT, 'sh_m'], ['sharp_image']),
 ];
 const pool = node('AveragePool', ['sharp_image'], ['avg2'], { kernel_shape: [A.INTS, [2, 2]], strides: [A.INTS, [2, 2]] });
 

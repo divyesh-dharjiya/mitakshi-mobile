@@ -7,7 +7,6 @@ import { MODELS, type ModelKey } from './registry';
  */
 const DIR = 'mitakshi-models-v1';
 /** Folder of an early build, which held 600 MB of engines this app no longer uses. */
-const OLD_DIR = 'reviva-models-v1';
 const fileOf = (url: string) => url.split('/').pop()!.split('?')[0];
 
 async function dir(): Promise<FileSystemDirectoryHandle | null> {
@@ -39,16 +38,6 @@ export async function cachedModels(): Promise<ModelKey[]> {
   const out: ModelKey[] = [];
   for (const k of Object.keys(MODELS) as ModelKey[]) if (await stored(k)) out.push(k);
   return out;
-}
-
-export async function clearModels() {
-  for (const name of [DIR, OLD_DIR]) {
-    try {
-      await (await navigator.storage.getDirectory()).removeEntry(name, { recursive: true });
-    } catch {
-      /* nothing stored */
-    }
-  }
 }
 
 async function download(url: string, expected: number | undefined, persist: boolean, onBytes: (loaded: number, total: number) => void) {
@@ -107,4 +96,25 @@ export async function loadModel(key: ModelKey, onBytes: (loaded: number, total: 
     }
   }
   throw failure instanceof Error ? failure : new Error('Download failed');
+}
+
+/**
+ * CodeFormer declares its strength input as a 64-bit float, which the browser's GPU engine cannot run ("no
+ * implementation for Cast"). The input only feeds four Cast-to-float32 nodes, so declaring it 32-bit instead is a
+ * one-byte edit of the input's type tag near the end of the file (ONNX stores graph inputs after the weights).
+ * Returns true when the edit was made; a file that does not look like CodeFormer is left alone.
+ */
+export function narrowWeightInput(model: Uint8Array): boolean {
+  // name "weight", then type { tensor_type { elem_type: 11 (DOUBLE) } }
+  const pattern = [0x0a, 0x06, 0x77, 0x65, 0x69, 0x67, 0x68, 0x74, 0x12, 0x06, 0x0a, 0x04, 0x08, 0x0b];
+  const from = Math.max(0, model.length - 2_000_000);
+  for (let i = model.length - pattern.length; i >= from; i--) {
+    let ok = true;
+    for (let k = 0; k < pattern.length && ok; k++) ok = model[i + k] === pattern[k];
+    if (ok) {
+      model[i + pattern.length - 1] = 0x01; // FLOAT
+      return true;
+    }
+  }
+  return false;
 }

@@ -67,8 +67,11 @@ const FFHQ_UNIT: [number, number][] = [
   [0.39308822, 0.725411],
   [0.61150205, 0.72490465],
 ];
-/** The restorer works on square face crops of one fixed size: 256 (GPEN-BFR-256) or 512 (GPEN-BFR-512). */
+/** The restorer works on square face crops of one fixed size (512 for CodeFormer). */
 export type CropSize = 256 | 512;
+
+/** CodeFormer fidelity: 0.7 keeps the person recognisable and the skin natural; lower values rebuild more and drift from the photo. */
+const CODEFORMER_WEIGHT = 0.7;
 
 /** Least-squares similarity transform (rotation + uniform scale + translation) src → dst. */
 function similarity(src: [number, number][], dst: [number, number][]): Affine {
@@ -89,7 +92,7 @@ function similarity(src: [number, number][], dst: [number, number][]): Affine {
 
 export const alignMatrix = (f: Face, size: CropSize): Affine => similarity(f.kps, FFHQ_UNIT.map(([x, y]) => [x * size, y * size] as [number, number]));
 
-// ── Restoration (GPEN-BFR-256: RGB in [-1, 1], 256²) ────────────────────────────────────────────
+// ── Restoration (CodeFormer: RGB in [-1, 1], 512²) ────────────────────────────────────────────
 /**
  * Restore one face. The restorer sees a 256² crop, but the face in the photo is often larger, so a 256² result
  * pasted back would look softer than the rest of the picture. Two fixes:
@@ -100,8 +103,16 @@ export const alignMatrix = (f: Face, size: CropSize): Affine => similarity(f.kps
  */
 export async function restoreFace(ort: Ort, session: ORT.InferenceSession, img: Raw, m: Affine, size: CropSize, detail?: (crop: Raw) => Promise<Raw>, outScale = 1) {
   const aligned = warpAffine(img, m, size, size);
-  const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', toCHW(aligned, 2 / 255, -1), [1, 3, size, size]) });
-  const t = out[session.outputNames[0]];
+  const picture = session.outputNames[0]; // CodeFormer also lists internal feature maps: ask for the picture only
+  const feeds: Record<string, ORT.Tensor> = { [session.inputNames[0]]: new ort.Tensor('float32', toCHW(aligned, 2 / 255, -1), [1, 3, size, size]) };
+  // CodeFormer's second input: how closely to follow the photo (0 rebuilds the most, 1 stays closest to what is there).
+  if (session.inputNames.includes('weight')) {
+    // 32-bit when the loader narrowed the input for the browser's GPU engine (models.ts), 64-bit as the file ships.
+    const meta = (session as { inputMetadata?: readonly { name: string; type?: string }[] }).inputMetadata?.find((i) => i.name === 'weight');
+    feeds.weight = meta?.type === 'float32' ? new ort.Tensor('float32', new Float32Array([CODEFORMER_WEIGHT]), [1]) : new ort.Tensor('float64', new Float64Array([CODEFORMER_WEIGHT]), [1]);
+  }
+  const out = await session.run(feeds, [picture]);
+  const t = out[picture];
   const base = fromCHW(t.data as Float32Array, size, size, 127.5, 127.5);
   t.dispose?.();
   matchTone(base, aligned);

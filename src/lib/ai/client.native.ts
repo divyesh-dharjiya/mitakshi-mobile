@@ -9,13 +9,12 @@ import * as ortRN from 'onnxruntime-react-native';
 import type * as ORT from 'onnxruntime-web';
 import { asPic } from '@/lib/native/pic';
 import { type Face, alignMatrix, detectFaces, pasteFaces, restoreFace } from './faces';
-import { type Affine, type Raw, bitmapToRaw, cloneRaw, isGrayscale, rawToBitmap, resizeRaw } from './image';
-import { DownloadError, cachedModels, clearModels, modelPath } from './models.native';
+import { type Affine, type Raw, bitmapToRaw, cloneRaw, rawToBitmap, resizeRaw } from './image';
+import { DownloadError, cachedModels, modelPath } from './models.native';
 import type { EnhanceOptions, FaceInfo, Res } from './protocol';
 import { MODELS, type ModelKey, RESTORER_SIZE } from './registry';
 import { debug } from '@/lib/debug';
-import { providersFor } from './accel.native';
-import { SR_TILE, colorize, matte, superResolve, upscaleCrop } from './tasks';
+import { matte, superResolve, upscaleCrop } from './tasks';
 
 // The shared pipeline is typed against onnxruntime-web; both packages implement onnxruntime-common.
 const ort = ortRN as unknown as typeof ORT;
@@ -35,7 +34,7 @@ const MIN_FACE_PX = 32;
 /** Restoring a face costs seconds on a phone: the biggest ones in a crowd are the ones people look at. */
 const MAX_FACES = 8;
 /** Rough relative cost of each step (a restored face = 1), used for one overall progress bar and a time estimate. */
-const COST = { detect: 0.15, load: 0.3, face: 0.5, tile: 0.35, colorize: 0.8, finish: 0.3 };
+const COST = { detect: 0.15, load: 0.3, face: 0.5, tile: 0.35, finish: 0.3 };
 /** Keep at most this many of the large engines loaded at once (memory). */
 const MAX_BIG = 1;
 const SMALL: ModelKey[] = ['detector', 'sr', 'matte'];
@@ -88,15 +87,8 @@ class AIClient {
       const lean = key === 'restorer';
       const base = { graphOptimizationLevel: 'all' as const, logSeverityLevel: 3 as const, intraOpNumThreads: THREADS, enableCpuMemArena: !lean, enableMemPattern: !lean };
       if (cpu) return ort.InferenceSession.create(path, { ...base, executionProviders: ['cpu'] });
-      if (key === 'sr') {
-        // The upscaler uses the phone's accelerator when it has proven faster and correct (the face restorer stays on the CPU: its self-test would load the big model twice).
-        try {
-          const providers = await providersFor(key, path, SR_TILE, THREADS);
-          return await ort.InferenceSession.create(path, { ...base, executionProviders: providers as never });
-        } catch (e) {
-          console.warn('[ai] upscaler accelerator failed, using the CPU:', e);
-        }
-      }
+      // XNNPACK (optimised ARM kernels) with the plain CPU behind it. Android's NNAPI is not used: its drivers differ
+      // from phone to phone (slow on some, wrong pixels or a crash on others) and Android 15 deprecates it.
       try {
         return await ort.InferenceSession.create(path, { ...base, executionProviders: ['xnnpack', 'cpu'] });
       } catch {
@@ -139,7 +131,7 @@ class AIClient {
       const img = bitmapToRaw(bitmap);
       asPic(bitmap).close();
       const faces = (await this.detect(img)).length;
-      return { type: 'scanned' as const, id: 0, faces, grayscale: isGrayscale(img) };
+      return { type: 'scanned' as const, id: 0, faces };
     });
   }
 
@@ -165,23 +157,12 @@ class AIClient {
     // One overall progress value: every step adds its share of `total` as it finishes.
     const tiles = (w: number, h: number) => Math.ceil(w / 224) * Math.ceil(h / 224);
     let done = 0;
-    let total = COST.finish + (o.faces ? COST.detect + COST.load + 2 * COST.face : 0) + (o.colorize ? COST.load + COST.colorize : 0) + (o.scale > 1 ? COST.load + tiles(img.width, img.height) * COST.tile : 0);
+    let total = COST.finish + (o.faces ? COST.detect + COST.load + 2 * COST.face : 0) + (o.scale > 1 ? COST.load + tiles(img.width, img.height) * COST.tile : 0);
     let shown = 0;
     const report = (stage: string, extra = 0) => {
       shown = Math.max(shown, Math.min(0.99, (done + extra) / total));
       onProgress?.(stage, shown);
     };
-
-    if (o.colorize) {
-      report('Colorizing');
-      const s = await this.session('colorizer', onProgress, safe);
-      done += COST.load;
-      this.checkpoint();
-      await pause();
-      img = await colorize(ort, s, img);
-      done += COST.colorize;
-      lap('colorized');
-    }
 
     let faces: Face[] = [];
     const restored: { restored: Raw; large: Raw; matrix: Affine; aligned: Raw }[] = [];
@@ -270,13 +251,12 @@ class AIClient {
     });
   }
 
-  clearModels(): Promise<Result<'cleared'>> {
-    return this.queue(async () => {
-      for (const [, p] of this.sessions) p.then((s) => s.release()).catch(() => {});
-      this.sessions.clear();
-      await clearModels();
-      return { type: 'cleared' as const, id: 0 };
-    });
+  /**
+   * Load a model that is already saved on this phone into the engine in the background, so the next Enhance does not wait
+   * for it. Never queues other work behind it and never downloads anything (the caller checks that it is saved).
+   */
+  warm(key: ModelKey) {
+    this.session(key).catch(() => {});
   }
 
   /** Cooperative: the job stops at the next tile / face boundary. */

@@ -96,26 +96,3 @@ export function fromCHW(t: ArrayLike<number>, w: number, h: number, scale: numbe
   }
   return out;
 }
-
-/** True when the image is effectively monochrome (including sepia-toned prints). */
-export function isGrayscale(img: Raw): boolean {
-  const d = img.data;
-  const step = Math.max(1, Math.floor((img.width * img.height) / 40000)) * 4;
-  // The print's own tint axis (e.g. sepia), then how much colour remains off that axis.
-  let tr = 0, tg = 0, tb = 0;
-  for (let i = 0; i < d.length; i += step) {
-    const L = (d[i] + d[i + 1] + d[i + 2]) / 3;
-    tr += d[i] - L; tg += d[i + 1] - L; tb += d[i + 2] - L;
-  }
-  const tl = Math.hypot(tr, tg, tb) || 1;
-  tr /= tl; tg /= tl; tb /= tl;
-  let resid = 0, n = 0;
-  for (let i = 0; i < d.length; i += step) {
-    const L = (d[i] + d[i + 1] + d[i + 2]) / 3;
-    const cr = d[i] - L, cg = d[i + 1] - L, cb = d[i + 2] - L;
-    const k = cr * tr + cg * tg + cb * tb;
-    resid += Math.hypot(cr - k * tr, cg - k * tg, cb - k * tb);
-    n++;
-  }
-  return resid / n < 4;
-}

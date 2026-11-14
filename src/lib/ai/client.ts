@@ -1,3 +1,4 @@
+import type { ModelKey } from './registry';
 import type { EnhanceOptions, Req, Res } from './protocol';
 
 const ASSET_BASE = (process.env.EXPO_PUBLIC_ASSET_BASE ?? '').replace(/\/$/, '');
@@ -90,8 +91,12 @@ class AIClient {
   matte(bitmap: ImageBitmap, onProgress?: Progress) {
     return this.call<'matted'>({ type: 'matte', bitmap } as Req, [bitmap], onProgress);
   }
-  clearModels() {
-    return this.call<'cleared'>({ type: 'clear-models' });
+  /**
+   * Load a model that is already saved on this device into the engine in the background, so the next Enhance does not wait
+   * for it. Fire and forget: it never queues other work behind it and never downloads anything.
+   */
+  warm(key: ModelKey) {
+    this.worker.postMessage({ type: 'warm', id: 0, key } satisfies Req);
   }
   /** Cooperative: the worker stops at the next tile / face boundary. */
   cancel() {

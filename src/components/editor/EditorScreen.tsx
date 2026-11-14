@@ -79,9 +79,11 @@ function Header({ wide }: { wide: boolean }) {
         onPress={() => useEditor.setState({ saveOpen: true })}
         style={({ pressed }) => [styles.save, busy && { opacity: 0.4 }, pressed && styles.pressed]}
       >
-        <LinearGradient {...C.grad} style={StyleSheet.absoluteFill} />
-        <Download size={18} color={C.onAccent} strokeWidth={2.4} />
-        <Text style={styles.saveText}>Save</Text>
+        <LinearGradient {...C.grad} style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <View style={styles.saveRow}>
+          <Download size={18} color={C.onAccent} strokeWidth={2.4} />
+          <Text style={styles.saveText}>Save</Text>
+        </View>
       </Pressable>
     </View>
   );
@@ -220,6 +222,7 @@ const useStyles = makeStyles((C) => ({
   autoOn: { backgroundColor: C.accent, borderColor: C.accent },
   autoText: { color: C.accent, fontSize: 15, fontFamily: F.uiBold },
   save: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 42, paddingHorizontal: 18, borderRadius: 21, overflow: 'hidden' },
+  saveRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   saveText: { color: C.onAccent, fontSize: 15, fontFamily: F.uiBold },
   pressed: { opacity: 0.75, transform: [{ scale: 0.96 }] },
   stage: { flex: 1, minHeight: 0, overflow: 'hidden', marginHorizontal: 10, borderRadius: 26, backgroundColor: C.stage, borderWidth: 1, borderColor: C.line },

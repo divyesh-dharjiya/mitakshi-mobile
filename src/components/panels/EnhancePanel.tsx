@@ -1,5 +1,5 @@
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Maximize2, Palette, RotateCcw, ScanFace, Sparkles } from '@/components/icons';
+import { Maximize2, RotateCcw, ScanFace, Sparkles, WandSparkles } from '@/components/icons';
 import { Button } from '@/components/ui/Button';
 import { Slider } from '@/components/ui/Slider';
 import { OptionPill } from '@/components/ui/Tile';
@@ -54,6 +54,7 @@ export function EnhancePanel() {
   const opts = useEditor((s) => s.opts);
   const faces = useEditor((s) => s.faces);
   const fidelity = useEditor((s) => s.fidelity);
+  const autoEdit = useEditor((s) => s.autoEdit);
   // Something was done to the photo (Undo has a step): offer "Enhance again" and the way back.
   const edited = useEditor((s) => s.historyDepth > 0);
   useEditor((s) => s.cached); // re-render when an engine finishes downloading
@@ -72,12 +73,12 @@ export function EnhancePanel() {
   return (
     <>
       <View style={styles.tiles}>
-        <OptionPill icon={ScanFace} label="Faces" value={opts.faces ? (scan ? `${scan.faces || 'No'} found` : 'On') : 'Off'} active={opts.faces} disabled={busy} onPress={() => setOpts(opts.faces ? { faces: false } : { faces: true, colorize: false })} />
-        <OptionPill icon={Palette} label="Colorize" value={opts.colorize ? 'On' : scan?.grayscale ? 'B&W photo' : 'Off'} active={opts.colorize} disabled={busy} onPress={() => setOpts(opts.colorize ? { colorize: false } : { colorize: true, faces: false })} />
+        <OptionPill icon={ScanFace} label="Faces" value={opts.faces ? (scan ? `${scan.faces || 'No'} found` : 'On') : 'Off'} active={opts.faces} disabled={busy} onPress={() => setOpts({ faces: !opts.faces })} />
+        <OptionPill icon={WandSparkles} label="Auto edit" value={autoEdit ? 'On' : 'Off'} active={autoEdit} disabled={busy} onPress={() => useEditor.setState({ autoEdit: !autoEdit })} />
         <OptionPill icon={Maximize2} label="Size" value={SIZES[opts.scale]} active={opts.scale > 1} disabled={busy} onPress={() => setOpts({ scale: NEXT_SIZE[opts.scale] })} />
       </View>
 
-      <Button variant="primary" size="lg" block icon={Sparkles} disabled={busy} onPress={() => void runEnhance()}>
+      <Button variant="primary" size="lg" block icon={Sparkles} disabled={busy || (!opts.faces && opts.scale === 1 && !autoEdit)} onPress={() => void runEnhance()}>
         {edited ? 'Enhance again' : 'Enhance'}
       </Button>
       <Text style={styles.info}>
